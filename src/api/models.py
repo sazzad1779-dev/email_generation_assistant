@@ -13,6 +13,16 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from src.utils.logging_config import get_logger
+from src.utils.validators import (
+    check_long_facts,
+    sanitize_name,
+    validate_facts_not_empty,
+    validate_intent_specific,
+)
+
+logger = get_logger(__name__)
+
 
 # ── Enums ────────────────────────────────────────────────────────────────────
 
@@ -92,50 +102,24 @@ class EmailRequest(BaseModel):
     @classmethod
     def validate_facts_not_empty(cls, v: List[str]) -> List[str]:
         """Ensure each fact is substantive (≥5 chars after stripping)."""
-        for i, fact in enumerate(v):
-            stripped = fact.strip()
-            if len(stripped) < 5:
-                raise ValueError(
-                    f"Fact #{i + 1} is too short ({len(stripped)} chars). "
-                    "Each fact must be at least 5 characters."
-                )
-        return [f.strip() for f in v]
+        return validate_facts_not_empty(v)
 
     @field_validator("intent")
     @classmethod
     def validate_intent_specific(cls, v: str) -> str:
         """Reject vague intents that contain only generic email words."""
-        stripped = v.strip()
-        forbidden = {"email", "write", "compose", "draft"}
-        words = set(stripped.lower().split())
-        if forbidden & words and len(stripped) < 30:
-            raise ValueError(
-                "Intent is too vague. Be specific — describe the purpose, "
-                "e.g., 'Request a deadline extension for Q4 marketing report' "
-                "instead of 'write an email'."
-            )
-        return stripped
+        return validate_intent_specific(v)
 
     @field_validator("recipient_name", "sender_name")
     @classmethod
     def sanitize_name(cls, v: Optional[str]) -> Optional[str]:
         """Strip special characters from names to prevent injection."""
-        if v is None:
-            return v
-        sanitized = "".join(c for c in v if c.isprintable() and c not in "<>\"'&")
-        return sanitized.strip() or None
+        return sanitize_name(v)
 
     @model_validator(mode="after")
-    def log_fact_count_warning(self) -> "EmailRequest":
-        """Log a warning (via field metadata) if facts are very long."""
-        for i, fact in enumerate(self.key_facts):
-            if len(fact) > 500:
-                # We attach a warning — consumers can check __pydantic_extra__
-                import logging
-
-                logging.getLogger(__name__).warning(
-                    "Fact #%d exceeds 500 characters — will be truncated", i + 1
-                )
+    def warn_on_long_facts(self) -> "EmailRequest":
+        """Log a warning if any fact exceeds 500 characters."""
+        check_long_facts(self.key_facts)
         return self
 
 

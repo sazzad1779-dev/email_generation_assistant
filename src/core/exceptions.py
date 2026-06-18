@@ -1,81 +1,62 @@
 """
-Custom exception classes for the Email Generation Assistant.
+Domain exception classes for the Email Generation Assistant.
 
-All custom exceptions extend FastAPI's HTTPException to ensure
-consistent error responses across the application.
+These are pure domain exceptions decoupled from any web framework (DIP).
+Exception handlers in the API layer convert them to HTTP responses.
 """
 
-from fastapi import HTTPException
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
 
 
-class RateLimitException(HTTPException):
-    """Raised when a provider rate limit is hit.
-
-    Returns HTTP 429 with a retry_after header hint.
-    """
-
-    def __init__(self, retry_after: int) -> None:
-        super().__init__(
-            status_code=429,
-            detail="Rate limit exceeded. Please wait before retrying.",
-        )
-        self.retry_after = retry_after
+class EmailGenException(Exception):
+    """Base exception for all application-level errors."""
 
 
-class LLMFailureException(HTTPException):
-    """Raised when an LLM provider call fails unexpectedly.
+@dataclass
+class RateLimitException(EmailGenException):
+    """Raised when a rate limit is hit."""
 
-    Returns HTTP 503 with the provider name and error detail.
-    """
-
-    def __init__(self, provider: str, detail: str) -> None:
-        super().__init__(
-            status_code=503,
-            detail=f"LLM provider '{provider}' failed: {detail}",
-        )
-        self.provider = provider
+    retry_after: int = 60
+    message: str = "Rate limit exceeded. Please wait before retrying."
+    provider: Optional[str] = None
 
 
-class ProviderQuotaExhausted(HTTPException):
-    """Raised when a provider has exhausted its daily quota.
+@dataclass
+class LLMFailureException(EmailGenException):
+    """Raised when an LLM provider call fails unexpectedly."""
 
-    Returns HTTP 429 with the provider name and reset time.
-    """
-
-    def __init__(self, provider: str, reset_at: str) -> None:
-        super().__init__(
-            status_code=429,
-            detail=f"Provider '{provider}' quota exhausted until {reset_at}",
-        )
-        self.provider = provider
-        self.reset_at = reset_at
+    provider: str = "unknown"
+    message: str = "LLM provider call failed"
+    detail: str = ""
 
 
-class ProviderNotAvailable(HTTPException):
-    """Raised when no provider is currently available.
+@dataclass
+class ProviderQuotaExhausted(EmailGenException):
+    """Raised when a provider has exhausted its daily quota."""
 
-    Returns HTTP 503 with suggestions for the user.
-    """
-
-    def __init__(self) -> None:
-        super().__init__(
-            status_code=503,
-            detail=(
-                "No LLM provider is currently available. "
-                "Please check your API keys and rate limits, or try again later."
-            ),
-        )
+    provider: str = "unknown"
+    reset_at: str = ""
+    message: str = "Provider quota exhausted"
 
 
-class EmailGenerationError(HTTPException):
-    """Raised when the email generation pipeline fails.
+@dataclass
+class ProviderNotAvailable(EmailGenException):
+    """Raised when no provider is currently available."""
 
-    Returns HTTP 500 with context about the failure.
-    """
+    message: str = (
+        "No LLM provider is currently available. "
+        "Please check your API keys and rate limits, or try again later."
+    )
 
-    def __init__(self, detail: str, stage: str = "unknown") -> None:
-        super().__init__(
-            status_code=500,
-            detail=f"Email generation failed at stage '{stage}': {detail}",
-        )
-        self.stage = stage
+
+@dataclass
+class EmailGenerationError(EmailGenException):
+    """Raised when the email generation pipeline fails."""
+
+    message: str = "Email generation failed"
+    stage: str = "unknown"
+    detail: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)

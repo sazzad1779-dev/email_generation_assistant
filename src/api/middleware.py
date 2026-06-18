@@ -95,18 +95,20 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 def setup_cors(app: FastAPI) -> None:
     """Configure CORS for the FastAPI application.
 
-    In development, all origins are allowed. In production, restrict to
-    the origins defined in ``settings.ALLOWED_ORIGINS`` (if set).
+    In development ``ALLOWED_ORIGINS`` defaults to ``["*"]``.  In
+    production set the ``ALLOWED_ORIGINS`` env var to a comma-separated
+    list (e.g. ``https://app.example.com,https://admin.example.com``).
+
+    Note: ``allow_credentials`` is automatically set to ``False`` when
+    ``allow_origins`` is ``["*"]`` to comply with the CORS specification.
     """
-    if settings.is_development or not hasattr(settings, "ALLOWED_ORIGINS"):
-        allow_origins = ["*"]
-    else:
-        allow_origins = settings.ALLOWED_ORIGINS  # type: ignore[attr-defined]
+    origins = list(settings.ALLOWED_ORIGINS)
+    use_wildcard = origins == ["*"]
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allow_origins,
-        allow_credentials=True,
+        allow_origins=origins,
+        allow_credentials=not use_wildcard,
         allow_methods=["*"],
         allow_headers=["*"],
     )

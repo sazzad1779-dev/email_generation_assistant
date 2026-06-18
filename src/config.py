@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     GROQ_RPM: int = 30
     GROQ_DAILY_LIMIT: int = 1000
 
+    # ── CORS / Security ───────────────────────────────────────────────
+    ALLOWED_ORIGINS: list[str] = ["*"]
+
     # ── Judge LLM Config ──────────────────────────────────────────────
     JUDGE_MODEL: str = "gemini-2.5-flash"
     JUDGE_TEMPERATURE: float = 0.0
