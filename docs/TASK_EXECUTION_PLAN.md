@@ -235,15 +235,15 @@ JUDGE_RUNS=3
 
 **Checklist:**
 
-- [ ] Initialize FastAPI app with title="Email Generation Assistant", version="1.0.0"
-- [ ] Add lifespan handler for startup (init providers, check health) / shutdown (cleanup)
-- [ ] Include routers from `src.api.routes` with `/v1` prefix
-- [ ] Add CORS middleware (allow all origins for development)
-- [ ] Add request ID tracing middleware (UUID per request)
-- [ ] Add structured logging middleware (structlog)
-- [ ] Global exception handler → returns standard `ErrorResponse`
-- [ ] Register exception handlers: RateLimitException (429), LLMFailureException (503), ValidationError (422), ProviderQuotaExhausted (429), Generic Exception (500)
-- [ ] Configure OpenAPI/Swagger docs with proper metadata
+- [x] Initialize FastAPI app with title="Email Generation Assistant", version="1.0.0"
+- [x] Add lifespan handler for startup (init providers, check health) / shutdown (cleanup)
+- [x] Include routers from `src.api.routes` with `/v1` prefix
+- [x] Add CORS middleware (allow all origins for development)
+- [x] Add request ID tracing middleware (UUID per request)
+- [x] Add structured logging middleware (structlog)
+- [x] Global exception handler → returns standard `ErrorResponse`
+- [x] Register exception handlers: RateLimitException (429), LLMFailureException (503), ValidationError (422), ProviderQuotaExhausted (429), Generic Exception (500)
+- [x] Configure OpenAPI/Swagger docs with proper metadata
 
 ---
 
@@ -287,14 +287,14 @@ def validate_intent_specific(cls, v):
 
 **Checklist:**
 
-- [ ] `ToneEnum` defined with all 6 tones
-- [ ] `EmailRequest` with all fields + validators for all corner cases (§3.1, §7.1)
-- [ ] `EmailResponse` with email + metadata + quality_flags
-- [ ] `EvaluateRequest` / `EvaluateResponse`
-- [ ] `BatchEvaluateRequest` / `BatchEvaluateResponse`
-- [ ] `CompareRequest` / `CompareResponse`
-- [ ] `HealthResponse` with provider status dict
-- [ ] `ErrorResponse` standard schema for all errors
+- [x] `ToneEnum` defined with all 6 tones
+- [x] `EmailRequest` with all fields + validators for all corner cases (§3.1, §7.1)
+- [x] `EmailResponse` with email + metadata + quality_flags
+- [x] `EvaluateRequest` / `EvaluateResponse`
+- [x] `BatchEvaluateRequest` / `BatchEvaluateResponse`
+- [x] `CompareRequest` / `CompareResponse`
+- [x] `HealthResponse` with provider status dict
+- [x] `ErrorResponse` standard schema for all errors
 
 ---
 
@@ -318,14 +318,14 @@ def validate_intent_specific(cls, v):
 
 **Checklist:**
 
-- [ ] `POST /generate` — validate request → call `generate_email()` → return response
-- [ ] `POST /evaluate` — run all 3 metrics → return scores
-- [ ] `POST /batch-evaluate` — run 10-scenario evaluation → return aggregate
-- [ ] `POST /compare` — run A/B comparison → return winner + analysis
-- [ ] `GET /health` — check providers + quota → return status
-- [ ] Proper HTTP status codes: 200, 201, 400, 422, 429, 500, 503
-- [ ] All errors returned as standard `ErrorResponse`
-- [ ] Rate limit info in response headers (`X-RateLimit-Remaining`, `X-Request-ID`)
+- [x] `POST /generate` — validate request → call `generate_email()` → return response
+- [x] `POST /evaluate` — run all 3 metrics → return scores
+- [x] `POST /batch-evaluate` — run 10-scenario evaluation → return aggregate
+- [x] `POST /compare` — run A/B comparison → return winner + analysis
+- [x] `GET /health` — check providers + quota → return status
+- [x] Proper HTTP status codes: 200, 201, 400, 422, 429, 500, 503
+- [x] All errors returned as standard `ErrorResponse`
+- [x] Rate limit info in response headers (`X-RateLimit-Remaining`, `X-Request-ID`)
 
 ---
 
@@ -360,11 +360,11 @@ class ValidationError(HTTPException):
 
 **`src/api/middleware.py` Checklist:**
 
-- [ ] Request ID middleware (UUID per request, add to request state + response headers)
-- [ ] CORS middleware (allow all origins in dev, configurable in prod)
-- [ ] Logging middleware (structlog: method, path, status, duration, request_id)
-- [ ] Global exception handler for unhandled errors
-- [ ] Rate limit error handler → 429 with retry_after
+- [x] Request ID middleware (UUID per request, add to request state + response headers)
+- [x] CORS middleware (allow all origins in dev, configurable in prod)
+- [x] Logging middleware (structlog: method, path, status, duration, request_id)
+- [x] Global exception handler for unhandled errors
+- [x] Rate limit error handler → 429 with retry_after
 
 ---
 
@@ -372,12 +372,12 @@ class ValidationError(HTTPException):
 
 **Checklist:**
 
-- [ ] Configure `structlog` with JSON formatter
-- [ ] Add console handler (colored for dev, JSON for prod)
-- [ ] Add file handler with rotation
-- [ ] Configure log levels per environment (DEBUG for dev, INFO for prod)
-- [ ] Add request_id to all log entries automatically
-- [ ] Create convenience functions: `get_logger(name)`
+- [x] Configure `structlog` with JSON formatter
+- [x] Add console handler (colored for dev, JSON for prod)
+- [x] Add file handler with rotation
+- [x] Configure log levels per environment (DEBUG for dev, INFO for prod)
+- [x] Add request_id to all log entries automatically
+- [x] Create convenience functions: `get_logger(name)`
 
 ---
 

@@ -79,9 +79,25 @@ _buckets: dict[str, TokenBucket] = {
     "groq": TokenBucket(settings.GROQ_RPM, settings.GROQ_DAILY_LIMIT),
 }
 
-# Track per-client quotas (simple in-memory dict)
-_client_quotas: defaultdict[str, int] = defaultdict(int)
-_CLIENT_MAX_REQUESTS = 100  # Max requests per client per minute (sliding window approximation)
+# ── Per-Client Sliding-Window Rate Limiter ─────────────────────────────
+
+_CLIENT_WINDOW_SEC = 60       # sliding window width (seconds)
+_CLIENT_MAX_REQUESTS = 100    # max requests per window per client
+# Map: client_id -> deque of request timestamps (monotonic seconds)
+_client_windows: defaultdict[str, list[float]] = defaultdict(list)
+
+
+def _prune_client_window(client_id: str, now: float) -> list[float]:
+    """Remove timestamps older than the sliding window and return the rest."""
+    timestamps = _client_windows[client_id]
+    cutoff = now - _CLIENT_WINDOW_SEC
+    # Pop oldest entries that fall outside the window
+    while timestamps and timestamps[0] < cutoff:
+        timestamps.pop(0)
+    if not timestamps:
+        del _client_windows[client_id]
+        return []
+    return timestamps
 
 
 def _get_client_id(request: Request) -> str:
@@ -106,19 +122,34 @@ def _get_client_id(request: Request) -> str:
 async def rate_limit_dependency(request: Request) -> None:
     """FastAPI dependency that enforces per-client rate limiting.
 
+    Uses a sliding-window algorithm: each client is allowed up to
+    ``_CLIENT_MAX_REQUESTS`` requests per 60-second window.  Stale
+    entries are pruned on every call, so the ``_client_windows`` dict
+    cannot grow unbounded.
+
     Attaches ``rate_limit_remaining`` to ``request.state`` for the
     logging middleware to include in response headers.
 
     Raises ``RateLimitException`` (HTTP 429) if the client exceeds limits.
     """
     client_id = _get_client_id(request)
-    _client_quotas[client_id] += 1
+    now = time.monotonic()
 
-    if _client_quotas[client_id] > _CLIENT_MAX_REQUESTS:
-        raise RateLimitException(retry_after=60)
+    # Prune expired timestamps and get the current count
+    timestamps = _prune_client_window(client_id, now)
+
+    if len(timestamps) >= _CLIENT_MAX_REQUESTS:
+        # Client is over the limit — oldest timestamp tells us when to retry
+        oldest = timestamps[0]
+        retry_after = max(oldest + _CLIENT_WINDOW_SEC - now, 1.0)
+        raise RateLimitException(retry_after=int(retry_after))
+
+    # Record this request
+    timestamps.append(now)
+    _client_windows[client_id] = timestamps
 
     request.state.rate_limit_remaining = max(
-        0, _CLIENT_MAX_REQUESTS - _client_quotas[client_id]
+        0, _CLIENT_MAX_REQUESTS - len(timestamps)
     )
 
 
