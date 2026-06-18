@@ -370,11 +370,11 @@ def validate_intent_specific(cls, v):
 | `POST` | `/compare` | `ComparisonService.compare()` |
 | `GET` | `/health` | `HealthService.check_health()` |
 
-**Service Layer (`src/api/services.py`):**
+**Service Layer (`src/api/services/`):**
 
-- [x] `EmailGenerationService` — generates email (placeholder → LangGraph pipeline in Phase 2)
-- [x] `EvaluationService` — single + batch evaluation (placeholder → Phase 6)
-- [x] `ComparisonService` — A/B comparison (placeholder → Phase 7)
+- [x] `EmailGenerationService` — generates email via LangGraph pipeline (Phase 2 complete ✅)
+- [ ] `EvaluationService` — single + batch evaluation (placeholder → Phase 6)
+- [ ] `ComparisonService` — A/B comparison (placeholder → Phase 7)
 - [x] `HealthService` — provider health checks using rate limiter status
 
 **Dependencies (`src/api/dependencies.py`):**
@@ -497,7 +497,7 @@ class EmailGenerationError(EmailGenException):
 
 **Checklist:**
 
-- [ ] Define `EmailGenerationState` TypedDict:
+- [x] Define `EmailGenerationState` TypedDict:
 
 ```python
 class EmailGenerationState(TypedDict):
@@ -512,7 +512,7 @@ class EmailGenerationState(TypedDict):
     quality_passed: bool            # Quality gate result
 ```
 
-- [ ] Define default values for state initialization
+- [x] Define `create_initial_state()` factory for default state initialization
 
 ---
 
@@ -520,59 +520,59 @@ class EmailGenerationState(TypedDict):
 
 **Node 1: `validate_input`**
 
-- [ ] Validate and enrich input data
-- [ ] Detect intent category for few-shot selection (follow-up, request, announcement, escalation, etc.)
-- [ ] Estimate complexity score based on facts + tone
-- [ ] Check for PII in facts → sanitize logs
-- [ ] Handle corner cases: ambiguous intent, fact contradictions, PII detection
+- [x] Validate and enrich input data
+- [x] Detect intent category for few-shot selection (follow-up, request, announcement, escalation, etc.)
+- [x] Estimate complexity score based on facts + tone
+- [x] Check for PII in facts → sanitize logs
+- [x] Handle corner cases: ambiguous intent, fact contradictions, PII detection
 
 **Node 2: `construct_prompt`**
 
-- [ ] Load few-shot examples dynamically from registry (top 3 by semantic similarity)
-- [ ] Inject role-playing system prompt (Dr. Elena Voss persona)
-- [ ] Add chain-of-thought instructions (4 reasoning steps)
-- [ ] Add tone-specific guidance from tone profiles
-- [ ] Format facts for prompt injection
-- [ ] Add word count constraints
-- [ ] Handle edge: no matching examples → use defaults
+- [ ] Load few-shot examples dynamically from registry (top 3 by semantic similarity) — *Phase 3*
+- [x] Inject role-playing system prompt (Dr. Elena Voss persona)
+- [x] Add chain-of-thought instructions (4 reasoning steps)
+- [x] Add tone-specific guidance from inline tone profiles
+- [x] Format facts for prompt injection
+- [x] Add word count constraints
+- [x] Handle edge: no matching examples → use defaults
 
 **Node 3: `call_llm`**
 
-- [ ] Call primary LLM provider (Gemini) with rate limit handling
-- [ ] Capture metadata: model_used, prompt_tokens, completion_tokens, latency_ms
-- [ ] If rate limited → switch to fallback provider (Groq)
-- [ ] If all providers fail → set error state
-- [ ] Handle: cut-off output, safety filter refusal, wrong language, placeholder text
+- [ ] Call primary LLM provider (Gemini) with rate limit handling — *Phase 4*
+- [x] Capture metadata: model_used, latency_ms (placeholder)
+- [ ] If rate limited → switch to fallback provider (Groq) — *Phase 4*
+- [ ] If all providers fail → set error state — *Phase 4*
+- [x] Handle: placeholder text generation (will be replaced by real LLM calls in Phase 4)
 
 **Node 4: `post_process`**
 
-- [ ] Strip `<thinking>...</thinking>` tags via regex
-- [ ] Extract subject line (ensure it exists)
-- [ ] Ensure proper greeting (Hi/Dear/Hello) and closing (Best/Regards/Sincerely)
-- [ ] Validate word count (within ±20% of target)
-- [ ] Add signature if missing from sender_name
-- [ ] Normalize line endings and whitespace
-- [ ] Handle: missing greeting, missing closing, placeholder text `[Name]`
+- [x] Strip `<thinking>...</thinking>` tags via regex
+- [x] Extract subject line (ensure it exists)
+- [x] Ensure proper greeting (Hi/Dear/Hello) and closing (Best/Regards/Sincerely)
+- [x] Validate word count (within ±20% of target)
+- [x] Add signature if missing from sender_name
+- [x] Normalize line endings and whitespace
+- [x] Handle: missing greeting, missing closing, placeholder text `[Name]`
 
 **Node 5: `quality_check`**
 
-- [ ] Quick heuristic checks:
+- [x] Quick heuristic checks:
   - Has greeting? (regex: `Hi|Dear|Hello|Hey`)
   - Has closing? (regex: `Best|Regards|Sincerely|Thanks|Cheers`)
   - Has subject line? (line starting with `Subject:`)
   - Word count within ±20% of target?
   - No placeholder text like `[Name]`, `[Company]`, `[Email]`?
-- [ ] If fail AND `retry_count < 2` → route back to `construct_prompt` with stronger instructions
-- [ ] If fail AND `retry_count >= 2` → set `quality_passed=False`, add warning flag, continue
+- [x] If fail AND `retry_count < 2` → route back to `construct_prompt` with stronger instructions
+- [x] If fail AND `retry_count >= 2` → set `quality_passed=False`, add warning flag, continue
 
 **Checklist:**
 
-- [ ] All 5 node functions implemented
-- [ ] `validate_input` enriches state with intent category + complexity
-- [ ] `construct_prompt` assembles complete prompt from templates
-- [ ] `call_llm` handles rate limits + fallback
-- [ ] `post_process` cleans output and fixes structure
-- [ ] `quality_check` validates with auto-retry
+- [x] All 5 node functions implemented
+- [x] `validate_input` enriches state with intent category + complexity
+- [x] `construct_prompt` assembles complete prompt from templates
+- [x] `call_llm` captures metadata (placeholder until Phase 4)
+- [x] `post_process` cleans output and fixes structure
+- [x] `quality_check` validates with auto-retry
 
 ---
 
@@ -580,39 +580,45 @@ class EmailGenerationState(TypedDict):
 
 **Checklist:**
 
-- [ ] Define `route_after_quality(state) -> str`:
+- [x] Define `route_after_quality(state) -> str`:
 
 ```python
 def route_after_quality(state: EmailGenerationState) -> str:
     if state.get("error"):
         return "error_handler"
-    if state["retry_count"] < 2 and not state.get("quality_passed", True):
+    if not state.get("quality_passed", True) and state.get("retry_count", 0) < 2:
         return "construct_prompt"  # Retry with stronger prompt
-    return "end"
+    return "__end__"
 ```
 
-- [ ] Build graph with `StateGraph(EmailGenerationState)`:
+- [x] Build graph with `StateGraph(EmailGenerationState)`:
 
 ```python
 builder = StateGraph(EmailGenerationState)
-builder.add_node("validate", validate_input)
+builder.add_node("validate_input", validate_input)
 builder.add_node("construct_prompt", construct_prompt)
 builder.add_node("call_llm", call_llm)
 builder.add_node("post_process", post_process)
 builder.add_node("quality_check", quality_check)
+builder.add_node("error_handler", error_handler)
 
-builder.set_entry_point("validate")
-builder.add_edge("validate", "construct_prompt")
+builder.set_entry_point("validate_input")
+builder.add_edge("validate_input", "construct_prompt")
 builder.add_edge("construct_prompt", "call_llm")
 builder.add_edge("call_llm", "post_process")
 builder.add_edge("post_process", "quality_check")
-builder.add_conditional_edges("quality_check", route_after_quality)
+builder.add_conditional_edges("quality_check", route_after_quality, {
+    "construct_prompt": "construct_prompt",
+    "error_handler": "error_handler",
+    "__end__": END,
+})
+builder.add_edge("error_handler", END)
 
 graph = builder.compile()
 ```
 
-- [ ] Add error handler node for unrecoverable failures
-- [ ] Test graph with mock data (mock LLM responses)
+- [x] Add error handler node for unrecoverable failures
+- [x] Test graph with mock data — verified functional test passes with placeholder LLM
 
 ---
 
@@ -620,13 +626,13 @@ graph = builder.compile()
 
 **Checklist:**
 
-- [ ] `async def generate_email(request: EmailRequest, preferred_model: str = "gemini") -> EmailResponse`
-- [ ] Initialize `EmailGenerationState` from request
-- [ ] Invoke compiled graph with `await graph.ainvoke(initial_state)`
-- [ ] Extract response from final state
-- [ ] Handle errors: if state has error → raise appropriate exception
-- [ ] Return `EmailResponse` with cleaned email + metadata + quality_flags
-- [ ] Add retry_count and quality_passed to metadata
+- [x] `async def generate_email(request: EmailRequest, preferred_model: str = "gemini") -> EmailResponse`
+- [x] Initialize `EmailGenerationState` from request
+- [x] Invoke compiled graph with `await graph.ainvoke(initial_state)`
+- [x] Extract response from final state
+- [x] Handle errors: if state has error → raise appropriate exception
+- [x] Return `EmailResponse` with cleaned email + metadata + quality_flags
+- [x] Add retry_count, quality_passed, and quality_score to metadata
 
 ---
 
