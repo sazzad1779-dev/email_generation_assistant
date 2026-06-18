@@ -286,21 +286,22 @@ JUDGE_RUNS=3
 ## PHASE 1: CORE FRAMEWORK & FASTAPI SETUP ⏱️ 2–3 hrs
 
 > **Goal:** Set up FastAPI application with all endpoints, middleware, and error handling.
+> **Design:** Follows SOLID principles — slim main.py, service layer (SRP, DIP), extracted exception handlers (SRP), decoupled domain exceptions (DIP), abstract interfaces (OCP).
 > **Parallelizable:** Tasks 1.1, 1.2, and 1.3 can be done together.
 
 ### Task 1.1 — FastAPI Application Entry Point (`src/main.py`)
+
+**Design:** `main.py` is intentionally slim — it creates the app, registers middleware/routers, and delegates exception handler registration to `src/api/exception_handlers.py`.
 
 **Checklist:**
 
 - [x] Initialize FastAPI app with title="Email Generation Assistant", version="1.0.0"
 - [x] Add lifespan handler for startup (init providers, check health) / shutdown (cleanup)
 - [x] Include routers from `src.api.routes` with `/v1` prefix
-- [x] Add CORS middleware (allow all origins for development)
-- [x] Add request ID tracing middleware (UUID per request)
-- [x] Add structured logging middleware (structlog)
-- [x] Global exception handler → returns standard `ErrorResponse`
-- [x] Register exception handlers: RateLimitException (429), LLMFailureException (503), ValidationError (422), ProviderQuotaExhausted (429), Generic Exception (500)
+- [x] Register middleware via `register_middleware(app)` from `src/api/middleware.py`
+- [x] Register exception handlers via `register_exception_handlers(app)` from `src/api/exception_handlers.py` (SRP)
 - [x] Configure OpenAPI/Swagger docs with proper metadata
+- [x] Root endpoint for API docs redirect
 
 ---
 
@@ -355,77 +356,126 @@ def validate_intent_specific(cls, v):
 
 ---
 
-### Task 1.3 — API Routes (`src/api/routes.py`) & Dependencies
+### Task 1.3 — API Routes (`src/api/routes.py`) & Service Layer (`src/api/services.py`)
+
+**Design:** Routes are thin — each endpoint validates input, delegates to a **service** (`src/api/services.py`), and returns a response. This separation follows SRP and makes business logic testable without HTTP.
 
 **Endpoints:**
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/generate` | Generate single email (Model A or B) |
-| `POST` | `/evaluate` | Run custom metrics on single email |
-| `POST` | `/batch-evaluate` | Run full 10-scenario evaluation |
-| `POST` | `/compare` | Run A/B model comparison |
-| `GET` | `/health` | Service health + rate limit status |
+| Method | Path | Service Method |
+|--------|------|----------------|
+| `POST` | `/generate` | `EmailGenerationService.generate()` |
+| `POST` | `/evaluate` | `EvaluationService.evaluate_single()` |
+| `POST` | `/batch-evaluate` | `EvaluationService.batch_evaluate()` |
+| `POST` | `/compare` | `ComparisonService.compare()` |
+| `GET` | `/health` | `HealthService.check_health()` |
+
+**Service Layer (`src/api/services.py`):**
+
+- [x] `EmailGenerationService` — generates email (placeholder → LangGraph pipeline in Phase 2)
+- [x] `EvaluationService` — single + batch evaluation (placeholder → Phase 6)
+- [x] `ComparisonService` — A/B comparison (placeholder → Phase 7)
+- [x] `HealthService` — provider health checks using rate limiter status
 
 **Dependencies (`src/api/dependencies.py`):**
 
-- Rate limiting dependency (per-client token bucket)
-- Provider availability check
-- Request ID generation and logging context
+- [x] `rate_limit_dependency` — per-client sliding window, delegates to `core/rate_limiter.py` (SRP)
+- [x] `check_provider_availability` — pre-flight check before calling LLM
+- [x] `get_request_id` — extracts request_id from request state
 
 **Checklist:**
 
-- [x] `POST /generate` — validate request → call `generate_email()` → return response
-- [x] `POST /evaluate` — run all 3 metrics → return scores
-- [x] `POST /batch-evaluate` — run 10-scenario evaluation → return aggregate
-- [x] `POST /compare` — run A/B comparison → return winner + analysis
-- [x] `GET /health` — check providers + quota → return status
+- [x] `POST /generate` — validate → call service → return response
+- [x] `POST /evaluate` — call evaluation service → return scores
+- [x] `POST /batch-evaluate` — call batch service → return aggregate
+- [x] `POST /compare` — call comparison service → return winner + analysis
+- [x] `GET /health` — call health service → return status
 - [x] Proper HTTP status codes: 200, 201, 400, 422, 429, 500, 503
 - [x] All errors returned as standard `ErrorResponse`
 - [x] Rate limit info in response headers (`X-RateLimit-Remaining`, `X-Request-ID`)
 
 ---
 
-### Task 1.4 — Middleware & Custom Exceptions
+### Task 1.4 — Middleware, Custom Exceptions & Exception Handlers
 
-**Files to Create:**
+**Design:** Domain exceptions (`src/core/exceptions.py`) are **pure Python dataclasses** — decoupled from FastAPI's `HTTPException` (DIP). Exception handlers (`src/api/exception_handlers.py`) convert them to HTTP responses at the web boundary. This allows reuse in CLI/scripts without web dependencies.
 
-- `src/api/middleware.py`
-- `src/core/exceptions.py`
+**Files:**
 
-**`src/core/exceptions.py`:**
+- `src/api/middleware.py` — middleware classes
+- `src/core/exceptions.py` — domain exceptions (decoupled from HTTP)
+- `src/api/exception_handlers.py` — ★NEW: exception handlers extracted from main.py (SRP)
+
+**`src/core/exceptions.py` — Domain Exceptions:**
 
 ```python
-class RateLimitException(HTTPException):
-    def __init__(self, retry_after: int):
-        super().__init__(status_code=429, detail="Rate limit exceeded")
-        self.retry_after = retry_after
+@dataclass
+class RateLimitException(EmailGenException):
+    retry_after: int = 60
+    provider: Optional[str] = None
 
-class LLMFailureException(HTTPException):
-    def __init__(self, provider: str, detail: str):
-        super().__init__(status_code=503, detail=f"LLM provider {provider} failed: {detail}")
+@dataclass
+class LLMFailureException(EmailGenException):
+    provider: str = "unknown"
+    detail: str = ""
 
-class ProviderQuotaExhausted(HTTPException):
-    def __init__(self, provider: str, reset_at: str):
-        super().__init__(status_code=429, detail=f"Provider {provider} quota exhausted")
-        self.reset_at = reset_at
+@dataclass
+class ProviderQuotaExhausted(EmailGenException):
+    provider: str = "unknown"
+    reset_at: str = ""
 
-class ValidationError(HTTPException):
-    def __init__(self, detail: str):
-        super().__init__(status_code=422, detail=detail)
+@dataclass
+class ProviderNotAvailable(EmailGenException): ...
+
+@dataclass
+class EmailGenerationError(EmailGenException):
+    stage: str = "unknown"
 ```
+
+**`src/api/exception_handlers.py` Checklist:**
+
+- [x] `register_exception_handlers(app)` function — single call in main.py
+- [x] RateLimitException → HTTP 429
+- [x] LLMFailureException → HTTP 503
+- [x] ProviderQuotaExhausted → HTTP 429
+- [x] ProviderNotAvailable → HTTP 503
+- [x] EmailGenerationError → HTTP 500
+- [x] RequestValidationError → HTTP 422
+- [x] StarletteHTTPException → generic HTTP error
+- [x] Global catch-all → HTTP 500
 
 **`src/api/middleware.py` Checklist:**
 
 - [x] Request ID middleware (UUID per request, add to request state + response headers)
 - [x] CORS middleware (allow all origins in dev, configurable in prod)
 - [x] Logging middleware (structlog: method, path, status, duration, request_id)
-- [x] Global exception handler for unhandled errors
-- [x] Rate limit error handler → 429 with retry_after
+- [x] `register_middleware(app)` function — single call in main.py
 
 ---
 
-### Task 1.5 — Structured Logging (`src/utils/logging_config.py`)
+### Task 1.5 — Abstract Interfaces & Rate Limiter (`src/core/interfaces.py`, `src/core/rate_limiter.py`)
+
+**Design:** Abstract interfaces (DIP, OCP) define contracts for LLM providers, metrics, rate limiters, and services. The rate limiter is a standalone service extracted from `dependencies.py` (SRP).
+
+**`src/core/interfaces.py` — Abstract Contracts:**
+
+- [x] `LLMResponse` dataclass — standardised provider response
+- [x] `LLMProvider` ABC — `generate()`, `check_health()`, `quota_remaining()`
+- [x] `RateLimiter` ABC — `acquire()`, `get_status()`
+- [x] `Metric` ABC — `score()`, `metric_name`, `weight`
+- [x] `EmailGenerator` ABC — for email generation service
+- [x] `EmailEvaluator` ABC — for evaluation service
+
+**`src/core/rate_limiter.py` — Rate Limiter Service:**
+
+- [x] `TokenBucket` class — per-provider token bucket (RPM + daily cap)
+- [x] `RateLimiterService` class — manages all provider buckets + per-client sliding window
+- [x] `consume_provider()` — check + consume tokens
+- [x] `check_client_limit()` — per-client rate limiting
+- [x] `get_provider_status()` / `get_all_provider_statuses()` — health check data
+- [x] Singleton `rate_limiter` instance for reuse across layers
+
+### Task 1.6 — Structured Logging (`src/utils/logging_config.py`)
 
 **Checklist:**
 
@@ -778,18 +828,15 @@ example_phrases:
 > **Goal:** Implement provider abstraction, Gemini + Groq integrations, rate limiting, and LLM-as-a-Judge.
 > **Can be parallelized with Phase 3 and Phase 5.**
 
-### Task 4.1 — Abstract Provider Interface (`src/llm/providers/base.py`)
+### Task 4.1 — Provider Base (`src/llm/providers/base.py`)
+
+> **Note:** The abstract `LLMProvider` interface and `LLMResponse` dataclass are already defined in `src/core/interfaces.py` (created in Phase 1.5). This file should extend that interface with provider-specific helpers.
 
 **Checklist:**
 
-- [ ] Define `LLMResponse` dataclass: content, model_used, provider, prompt_tokens, completion_tokens, latency_ms
-- [ ] Define abstract `LLMProvider` class:
-  - `async def generate(self, prompt: str, **kwargs) -> LLMResponse`
-  - `async def check_health(self) -> dict`
-  - `provider_name -> str`
-  - `quota_remaining -> int`
-  - `rpm_remaining -> int`
-- [ ] Define `ProviderHealth` dataclass
+- [x] `LLMResponse` dataclass — defined in `src/core/interfaces.py`
+- [x] `LLMProvider` abstract class — defined in `src/core/interfaces.py`
+- [ ] `src/llm/providers/base.py` — import and extend `LLMProvider` with shared utilities (retry logic, token counting, error mapping) used by concrete implementations
 
 ---
 
@@ -846,22 +893,20 @@ example_phrases:
 
 ---
 
-### Task 4.5 — Rate Limiter (`src/llm/rate_limiter.py`)
+### Task 4.5 — Rate Limiter Integration
+
+> **Note:** The `TokenBucket` class and `RateLimiterService` are already implemented in `src/core/rate_limiter.py` (Phase 1.5). This task is about integrating with the provider router.
 
 **Checklist:**
 
-- [ ] Implement `TokenBucket` class:
-  - `capacity`, `tokens`, `refill_rate`, `refill_period`
-  - `async def acquire(tokens=1) -> bool`
-  - Auto-refill based on elapsed time
-- [ ] Implement `RateLimiter` class (per-provider buckets):
-  - Gemini: capacity=10, refill_rate=10, refill_period=60 (10 RPM)
-  - Groq: capacity=30, refill_rate=30, refill_period=60 (30 RPM)
-  - Daily quota tracking (reset at midnight UTC)
-- [ ] `async def wait_and_acquire(provider: str) -> bool` — blocking wait with timeout
-- [ ] `get_quota_status(provider: str) -> Dict` — remaining daily, RPM remaining, reset time
+- [x] `TokenBucket` class — implemented in `src/core/rate_limiter.py`
+- [x] `RateLimiterService` — implemented in `src/core/rate_limiter.py`
+- [x] Per-provider buckets (Gemini: 10 RPM, Groq: 30 RPM)
+- [x] Daily quota tracking
+- [x] `consume_provider()` — check + consume tokens
+- [x] `get_provider_status()` — remaining daily, RPM remaining
+- [ ] Provider router uses `rate_limiter.consume_provider()` before each LLM call
 - [ ] Persist quota state to disk (`reports/quota_state.json`) for resilience
-- [ ] Integrate with provider router (check before calling)
 
 ---
 
@@ -978,27 +1023,15 @@ Senior Account Manager
 
 ### Task 6.1 — Abstract Metric Interface (`src/evaluation/metrics/base.py`)
 
+> **Note:** The abstract `Metric` interface is already defined in `src/core/interfaces.py` (Phase 1.5). This file should import and extend it with evaluation-specific helpers.
+
 **Checklist:**
 
-- [ ] Define abstract `BaseMetric` class:
-
-```python
-class BaseMetric(ABC):
-    @abstractmethod
-    async def score(self, email: str, **kwargs) -> Dict:
-        """Returns {'score': float, 'breakdown': dict, ...}"""
-        pass
-    
-    @property
-    @abstractmethod
-    def metric_name(self) -> str: ...
-    
-    @property
-    @abstractmethod
-    def weight(self) -> float: ...
-```
-
-- [ ] Standardized return format: `{"score": 0-100, "breakdown": {...}, "details": {...}}`
+- [x] `Metric` abstract class — defined in `src/core/interfaces.py`
+- [x] `metric_name`, `weight` properties — defined in `src/core/interfaces.py`
+- [x] `score()` method — defined in `src/core/interfaces.py`
+- [x] `MetricResult` protocol — defined in `src/core/interfaces.py`
+- [ ] `src/evaluation/metrics/base.py` — import `Metric` from `core.interfaces` and add shared metric utilities
 
 ---
 
