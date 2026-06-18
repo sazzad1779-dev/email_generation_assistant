@@ -58,6 +58,59 @@ Phase 3a    Phase 3b    Phase 4                          │
 
 ---
 
+## 🏗️ ARCHITECTURE PRINCIPLES — SOLID
+
+The entire codebase follows SOLID design principles:
+
+| Principle | Implementation |
+|-----------|---------------|
+| **S**ingle Responsibility | `main.py` is only the app factory; exception handlers extracted; rate limiter isolated; service layer owns business logic |
+| **O**pen/Closed | Abstract interfaces in `src/core/interfaces.py` — new providers or metrics added without modifying existing code |
+| **L**iskov Substitution | Domain exceptions in `src/core/exceptions.py` are pure Python — decoupled from FastAPI, reusable in CLI/scripts |
+| **I**nterface Segregation | Validation logic in `src/utils/validators.py` is separate from Pydantic models |
+| **D**ependency Inversion | Routes depend on service layer; services depend on abstract interfaces (not concretions) |
+
+### Data Flow
+
+```
+Request → FastAPI → Middleware → Routes (thin) → Service Layer → Core (interfaces)
+                   (CORS,        delegates to    (business        (LLM, Metrics,
+                    Logging,      services)        logic)          Evaluation)
+                    Request ID,
+                    Rate Limit)
+```
+
+### Updated Project Structure (refactored files highlighted)
+
+```
+src/
+├── main.py                  # Slim — app factory only
+├── config.py                # Pydantic Settings
+├── api/
+│   ├── __init__.py
+│   ├── routes.py            # Thin — delegates to services
+│   ├── models.py            # Pydantic models (lean validators)
+│   ├── services.py          # ★NEW — business logic layer (SRP)
+│   ├── dependencies.py      # FastAPI DI — delegates to core
+│   ├── exception_handlers.py # ★NEW — extracted from main.py (SRP)
+│   └── middleware.py         # CORS, logging, request ID
+├── core/
+│   ├── __init__.py
+│   ├── interfaces.py        # ★NEW — abstract contracts (DIP, OCP)
+│   ├── exceptions.py        # Domain exceptions (decoupled from HTTP)
+│   ├── rate_limiter.py      # ★NEW — extracted from deps (SRP)
+│   └── email_generator.py   # Future: LangGraph pipeline
+├── llm/                     # ★FUTURE — provider implementations
+├── evaluation/              # ★FUTURE — metric implementations
+├── prompts/                 # ★FUTURE — prompt templates
+└── utils/
+    ├── __init__.py
+    ├── validators.py        # ★NEW — extracted from models (ISP)
+    └── logging_config.py
+```
+
+---
+
 ## PHASE 0: PROJECT SCAFFOLDING & INITIALIZATION ⏱️ 2–3 hrs
 
 > **Goal:** Set up the entire project skeleton, environment, and all dependencies.
@@ -70,20 +123,24 @@ Phase 3a    Phase 3b    Phase 4                          │
 email-generation-assistant/
 ├── src/
 │   ├── __init__.py
-│   ├── main.py                    # FastAPI app entry point
+│   ├── main.py                    # FastAPI app entry point (slim — SRP)
 │   ├── config.py                  # Pydantic Settings, env vars
 │   ├── api/
 │   │   ├── __init__.py
-│   │   ├── routes.py              # FastAPI routers
+│   │   ├── routes.py              # FastAPI routers (thin — delegates to services)
 │   │   ├── models.py              # Pydantic request/response models
-│   │   ├── dependencies.py        # Auth, rate limiting, logging
-│   │   └── middleware.py          # Error handling, CORS, tracing
+│   │   ├── services.py            # ★ Business logic layer (SRP, DIP)
+│   │   ├── dependencies.py        # FastAPI DI functions
+│   │   ├── exception_handlers.py  # ★ Extracted from main.py (SRP)
+│   │   └── middleware.py          # CORS, logging, request ID
 │   ├── core/
 │   │   ├── __init__.py
-│   │   ├── email_generator.py     # Main orchestration logic
-│   │   ├── state.py               # LangGraph state definitions
-│   │   ├── graph.py               # LangGraph compilation
-│   │   └── exceptions.py          # Custom exceptions
+│   │   ├── interfaces.py          # ★ Abstract contracts (DIP, OCP)
+│   │   ├── exceptions.py          # Domain exceptions (decoupled from FastAPI)
+│   │   ├── rate_limiter.py        # ★ Extracted from deps (SRP)
+│   │   ├── email_generator.py     # Future: LangGraph pipeline
+│   │   ├── state.py               # Future: LangGraph state definitions
+│   │   └── graph.py               # Future: LangGraph compilation
 │   ├── prompts/
 │   │   ├── __init__.py
 │   │   ├── templates/
