@@ -208,17 +208,21 @@ JUDGE_RUNS=3
 
 ---
 
-### Task 0.3 — Setup Virtual Environment & Install Dependencies
+### Task 0.3 — Setup Virtual Environment & Install Dependencies (with `uv`)
+
+> **Using `uv`** — a fast Python package installer, resolver, and virtual environment manager (Rust-based alternative to pip/venv).
 
 **Checklist:**
 
-- [ ] Create Python venv: `python -m venv .venv`
+- [ ] Install uv (if not already installed): `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+- [ ] Create virtual environment: `uv venv .venv`
 - [ ] Activate venv: `.venv\Scripts\activate` (Windows)
-- [ ] Upgrade pip: `python -m pip install --upgrade pip`
-- [ ] Install all dependencies: `pip install -r requirements.txt`
-- [ ] Download spaCy model: `python -m spacy download en_core_web_md`
-- [ ] Download NLTK data: `python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords')"`
-- [ ] Verify: `python -c "import fastapi, langchain, langgraph, pydantic, sentence_transformers"` → no errors
+- [ ] Install all dependencies from requirements.txt: `uv pip install -r requirements.txt`
+- [ ] (Alternative) Or use pyproject.toml directly: `uv sync`
+- [ ] Download spaCy model: `uv run python -m spacy download en_core_web_md`
+- [ ] Download NLTK data: `uv run python -c "import nltk; nltk.download('punkt_tab'); nltk.download('stopwords'); nltk.download('wordnet')"`
+- [ ] Verify all packages: `uv run python -c "import fastapi, langchain, langgraph, pydantic, sentence_transformers, spacy, nltk"` → no errors
+- [ ] Check uv is installed: `uv --version`
 
 ---
 
@@ -1439,12 +1443,12 @@ SCS = 0.25 * Grammar + 0.25 * Fluency + 0.20 * Conciseness + 0.15 * Structure + 
 ## QUICK REFERENCE — ALL COMMANDS
 
 ```bash
-# ─── SETUP ───
-python -m venv .venv
+# ─── SETUP (with uv) ───
+uv venv .venv
 .venv\Scripts\activate                    # Windows
-pip install -r requirements.txt
-python -m spacy download en_core_web_md
-python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords')"
+uv pip install -r requirements.txt        # or: uv sync (with pyproject.toml)
+uv run python -m spacy download en_core_web_md
+uv run python -c "import nltk; nltk.download('punkt_tab'); nltk.download('stopwords')"
 
 # ─── RUN SERVER ───
 python scripts/run_server.py --reload --port 8000
