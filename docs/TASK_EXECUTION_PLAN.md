@@ -158,11 +158,11 @@ email-generation-assistant/
 
 **Checklist:**
 
-- [ ] Create all directories as per structure above
-- [ ] Add `__init__.py` to every Python package directory
-- [ ] Create `.gitkeep` in `reports/` and `data/human_references/`
-- [ ] Create `.gitignore` (Python + venv + .env + __pycache__ + *.pyc + reports/*.json)
-- [ ] Verify tree structure matches specification
+- [x] Create all directories as per structure above
+- [x] Add `__init__.py` to every Python package directory
+- [x] Create `.gitkeep` in `reports/` and `data/human_references/`
+- [x] Create `.gitignore` (Python + venv + .env + __pycache__ + *.pyc + reports/*.json)
+- [x] Verify tree structure matches specification
 
 ---
 
@@ -170,9 +170,9 @@ email-generation-assistant/
 
 **Checklist:**
 
-- [ ] Create `requirements.txt` with all dependencies from §10 of requirements doc
-- [ ] Create `pyproject.toml` for modern Python packaging
-- [ ] Create `.env.example` with template variables (NO real keys):
+- [x] Create `requirements.txt` with all dependencies from §10 of requirements doc
+- [x] Create `pyproject.toml` for modern Python packaging
+- [x] Create `.env.example` with template variables (NO real keys):
 
 ```env
 # LLM Provider API Keys
@@ -202,9 +202,9 @@ JUDGE_TEMPERATURE=0.0
 JUDGE_RUNS=3
 ```
 
-- [ ] Create `src/config.py` using Pydantic Settings with all above variables
-- [ ] Add validation for required API keys raising clear error if missing
-- [ ] Add `Settings` singleton instance
+- [x] Create `src/config.py` using Pydantic Settings with all above variables
+- [x] Add validation for required API keys raising clear error if missing
+- [x] Add `Settings` singleton instance
 
 ---
 
@@ -214,15 +214,15 @@ JUDGE_RUNS=3
 
 **Checklist:**
 
-- [ ] Install uv (if not already installed): `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
-- [ ] Create virtual environment: `uv venv .venv`
-- [ ] Activate venv: `.venv\Scripts\activate` (Windows)
-- [ ] Install all dependencies from requirements.txt: `uv pip install -r requirements.txt`
+- [x] Install uv (if not already installed): `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+- [x] Create virtual environment: `uv venv .venv`
+- [ ] Activate venv: `.venv\Scripts\activate` (Windows) — *execution policy blocks activation, used `.venv\Scripts\python.exe` directly instead*
+- [x] Install all dependencies from requirements.txt: `uv pip install -r requirements.txt`
 - [ ] (Alternative) Or use pyproject.toml directly: `uv sync`
-- [ ] Download spaCy model: `uv run python -m spacy download en_core_web_md`
-- [ ] Download NLTK data: `uv run python -c "import nltk; nltk.download('punkt_tab'); nltk.download('stopwords'); nltk.download('wordnet')"`
-- [ ] Verify all packages: `uv run python -c "import fastapi, langchain, langgraph, pydantic, sentence_transformers, spacy, nltk"` → no errors
-- [ ] Check uv is installed: `uv --version`
+- [x] Download spaCy model: `uv run python -m spacy download en_core_web_md`
+- [x] Download NLTK data: `uv run python -c "import nltk; nltk.download('punkt_tab'); nltk.download('stopwords'); nltk.download('wordnet')"`
+- [x] Verify all packages: `uv run python -c "import fastapi, langchain, langgraph, pydantic, sentence_transformers, spacy, nltk"` → no errors
+- [x] Check uv is installed: `uv --version`
 
 ---
 
